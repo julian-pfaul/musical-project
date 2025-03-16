@@ -1,6 +1,6 @@
 import torch
 import pretty_midi
-import conversion_functions
+import midi_utils
 
 import os
 import sys
@@ -16,7 +16,7 @@ for index, (file_name, tensor) in enumerate(data_list):
     try:
         midi_file_path = os.path.join(midi_directory_path, file_name)
 
-        midi = conversion_functions.convert_tensor_to_midi(tensor)
+        midi = midi_utils.convert_tensor_to_midi(tensor)
         midi.write(midi_file_path)
     except Exception as exception:
         print(f"file_name: {file_name}, exception: {exception}", end=" ")
