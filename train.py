@@ -1,4 +1,6 @@
-import model_utils
+import musical_model
+import musical_dataset
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -9,6 +11,8 @@ import matplotlib.image as mpimg
 import matplotlib.animation as animation
 
 import random
+import io
+import PIL
 
 import os
 import shutil
@@ -29,7 +33,7 @@ except:
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model = model_utils.MusicalModel().to(device)
+model = musical_model.MusicalModel().to(device)
 lr = 0.001
 
 if model_path is not None:
@@ -45,7 +49,7 @@ if model_path is not None:
         ...
 
 print("loading dataset")
-dataset = model_utils.MusicalDataset(data_path, device)
+dataset = musical_dataset.MusicalDataset(data_path, device)
 print("dataset loaded")
 
 num_epochs = 2000
@@ -58,48 +62,50 @@ except:
 
 criterion = nn.L1Loss()
 optimizer = optim.Adam(model.parameters(), lr=lr)
-scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, patience=200, factor=0.8)
+scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, patience=800, factor=0.9)
 
 overall_losses = 0
-iteration_losses = 0
 
 ani_titles = []
 ani_overall_losses = []
 ani_iteration_losses = []
 
-for epoch in range(1, num_epochs):
+for epoch in range(1, num_epochs+1):
     model.train()
 
-    iteration_losses = 0
-    for ipe in range(0, iterations_per_epoch):
-        ri = random.randint(0, len(dataset) - 1)
-        piece, index, note = dataset[ri]
+    ri = random.randint(0, len(dataset) - 1)
+    
+    for index in range(0, 12):
+        piece, note = dataset[ri]
 
-        outputs = model(piece, index)
+        output = model(piece)
 
         optimizer.zero_grad()
 
-        loss = criterion(outputs, note)
+        loss = criterion(output, torch.vstack((piece, note.unsqueeze(dim=0))))
         loss.backward()
         optimizer.step()
 
-        #scheduler.step(loss)
+    #scheduler.step(loss)
 
-        iteration_losses += loss.item()
         overall_losses += loss.item()
 
-    scheduler.step(iteration_losses)
+    scheduler.step(overall_losses/epoch/12)
 
-    ani_titles.append(f"[{epoch}/{num_epochs}] loss: {loss.item():.4f}, overall: {overall_losses/(epoch*iterations_per_epoch):.4f}, iteration: {iteration_losses/iterations_per_epoch:.4f}, lr: {scheduler.get_last_lr()[0]:.8f}")
-    ani_overall_losses.append(overall_losses / (epoch * iterations_per_epoch))
-    ani_iteration_losses.append(iteration_losses / iterations_per_epoch)
+    model.eval()
+
+    ani_titles.append(f"[{epoch}/{num_epochs}] loss: {loss.item():.4f}, overall: {overall_losses/epoch:.4f}, lr: {scheduler.get_last_lr()[0]:.8f}")
+    ani_overall_losses.append(overall_losses / epoch)
+    ani_iteration_losses.append(loss.item())
 
     if epoch % 10 == 0:
-        print(f"[{epoch}/{num_epochs}] loss: {loss.item():.4f}, overall: {overall_losses/(epoch*iterations_per_epoch):.4f}, iteration: {iteration_losses/iterations_per_epoch:.4f}, lr: {scheduler.get_last_lr()[0]:.8f}")
+        print(f"[{epoch}/{num_epochs}] loss: {loss.item():.4f}, overall: {overall_losses/epoch:.4f}, lr: {scheduler.get_last_lr()[0]:.8f}")
 
 if model_path is not None:
     torch.save(model.state_dict(), model_path)
     torch.save(scheduler.get_last_lr()[0], lr_path)
+
+    print("model saved")
 
     try:
         iteration = 0
@@ -110,35 +116,6 @@ if model_path is not None:
             ...
 
         torch.save(iteration+1, iteration_path)
+    except:
+        ...
 
-        if not os.path.exists(".anim"):
-            os.mkdir(".anim")
-
-        for index, title in enumerate(ani_titles):
-            plt.close("all")
-            plt.title(title)
-            plt.plot(ani_iteration_losses[0:index + 1])
-            plt.plot(ani_overall_losses[0:index + 1])
-            plt.savefig(f".anim/{index}.png")
-
-        
-        frames = []
-        fig = plt.figure()  
-
-
-        for index, _ in enumerate(ani_titles):
-            image = mpimg.imread(f".anim/{index}.png")
-
-            plt.axes().set_axis_off()
-
-            frames.append([plt.imshow(image)])
-
-        ani = animation.ArtistAnimation(fig, frames, interval=30, blit=True)
-        ani.save(f"animation{iteration}.mp4")
-
-        shutil.rmtree(".anim")
-
-    except Exception as e:
-        raise e
-
-    print("model saved")

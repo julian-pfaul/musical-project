@@ -19,6 +19,8 @@ for index, (file_name, tensor) in enumerate(data_list):
         midi = midi_utils.convert_tensor_to_midi(tensor)
         midi.write(midi_file_path)
     except Exception as exception:
-        print(f"file_name: {file_name}, exception: {exception}", end=" ")
+        print(f"file_name: {file_name}, exception: {exception}, {tensor}", end=" ")
 
     print()
+
+print("done")
