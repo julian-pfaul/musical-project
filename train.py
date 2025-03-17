@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
+import torch.utils as utils
 
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -33,7 +34,9 @@ except:
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model = musical_model.MusicalModel().to(device)
+n_inputs = int(sys.argv[4])
+
+model = musical_model.MusicalModel(n_inputs).to(device)
 lr = 0.001
 
 if model_path is not None:
@@ -49,7 +52,8 @@ if model_path is not None:
         ...
 
 print("loading dataset")
-dataset = musical_dataset.MusicalDataset(data_path, device)
+dataset = musical_dataset.MusicalDataset(data_path, n_inputs, device)
+dataloader = utils.data.DataLoader(dataset, batch_size=1024, shuffle=True)
 print("dataset loaded")
 
 num_epochs = 2000
@@ -62,44 +66,27 @@ except:
 
 criterion = nn.L1Loss()
 optimizer = optim.Adam(model.parameters(), lr=lr)
-scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, patience=800, factor=0.9)
-
-overall_losses = 0
-
-ani_titles = []
-ani_overall_losses = []
-ani_iteration_losses = []
+scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, patience=2000, factor=0.9)
 
 for epoch in range(1, num_epochs+1):
     model.train()
 
-    ri = random.randint(0, len(dataset) - 1)
-    
-    for index in range(0, 50):
-        piece, note = dataset[ri]
+    train_features, train_labels = next(iter(dataloader))
 
-        output = model(piece)
+    outputs = model(train_features)
 
-        optimizer.zero_grad()
+    optimizer.zero_grad()
 
-        loss = criterion(output, torch.vstack((piece, note.unsqueeze(dim=0))))
-        loss.backward()
-        optimizer.step()
+    loss = criterion(outputs, train_labels)
+    loss.backward()
+    optimizer.step()
 
-    #scheduler.step(loss)
-
-        overall_losses += loss.item()
-
-    scheduler.step(overall_losses/(epoch*50))
+    scheduler.step(loss)
 
     model.eval()
 
-    ani_titles.append(f"[{epoch}/{num_epochs}] loss: {loss.item():.4f}, overall: {overall_losses/(epoch*50):.4f}, lr: {scheduler.get_last_lr()[0]:.8f}")
-    ani_overall_losses.append(overall_losses / epoch)
-    ani_iteration_losses.append(loss.item())
-
-    if epoch % 10 == 0:
-        print(f"[{epoch}/{num_epochs}] loss: {loss.item():.4f}, overall: {overall_losses/(epoch*50):.4f}, lr: {scheduler.get_last_lr()[0]:.8f}")
+    if epoch % 200 == 0:
+        print(f"[{epoch}/{num_epochs}] loss: {loss.item():.4f}, lr: {scheduler.get_last_lr()[0]:.8f}")
 
 if model_path is not None:
     torch.save(model.state_dict(), model_path)

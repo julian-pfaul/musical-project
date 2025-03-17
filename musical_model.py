@@ -1,31 +1,28 @@
 import torch
 import torch.nn as nn
 
+import math
+
 class MusicalModel(nn.Module):
-    def __init__(self):
+    def __init__(self, n_inputs):
         super().__init__()
-
-        self.rnn = nn.RNN(4, 64, 6)
-
-        self.relu = nn.ReLU()
-
-        self.flatten = nn.Flatten(0)
-        self.fc0 = nn.LazyLinear(512)
-        self.fc1 = nn.Linear(512, 4)
-
-        self.fc2 = nn.Linear(64, 512)
-        self.fc3 = nn.Linear(512, 4)
         
+        self.input_size = 4
+        self.hidden_size = int(64 * (1 + math.log(n_inputs)))
+        self.num_layers = int(2 * (1 + math.log(n_inputs)))
+        self.output_size = 4
+
+        self.rnn = nn.RNN(self.input_size, self.hidden_size, self.num_layers, batch_first=True)
+
+        self.h2o = nn.Linear(self.hidden_size, self.output_size)
+
     def forward(self, x):
         out, hidden = self.rnn(x)
-        out = self.fc2(out)
-        out = self.relu(out)
-        out = self.fc3(out)
 
-        flattened = self.flatten(hidden)
+        hidden = hidden if self.num_layers == 1 else hidden[-1:, :, :]
 
-        gen = self.fc0(flattened)
-        gen = self.relu(gen)
-        gen = self.fc1(gen)
+        out = self.h2o(hidden.permute((1, 0, 2)))
 
-        return torch.vstack((out, gen))
+        return torch.hstack((x, out))
+    
+
