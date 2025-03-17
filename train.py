@@ -75,7 +75,7 @@ for epoch in range(1, num_epochs+1):
 
     ri = random.randint(0, len(dataset) - 1)
     
-    for index in range(0, 12):
+    for index in range(0, 50):
         piece, note = dataset[ri]
 
         output = model(piece)
@@ -90,16 +90,16 @@ for epoch in range(1, num_epochs+1):
 
         overall_losses += loss.item()
 
-    scheduler.step(overall_losses/epoch/12)
+    scheduler.step(overall_losses/(epoch*50))
 
     model.eval()
 
-    ani_titles.append(f"[{epoch}/{num_epochs}] loss: {loss.item():.4f}, overall: {overall_losses/epoch:.4f}, lr: {scheduler.get_last_lr()[0]:.8f}")
+    ani_titles.append(f"[{epoch}/{num_epochs}] loss: {loss.item():.4f}, overall: {overall_losses/(epoch*50):.4f}, lr: {scheduler.get_last_lr()[0]:.8f}")
     ani_overall_losses.append(overall_losses / epoch)
     ani_iteration_losses.append(loss.item())
 
     if epoch % 10 == 0:
-        print(f"[{epoch}/{num_epochs}] loss: {loss.item():.4f}, overall: {overall_losses/epoch:.4f}, lr: {scheduler.get_last_lr()[0]:.8f}")
+        print(f"[{epoch}/{num_epochs}] loss: {loss.item():.4f}, overall: {overall_losses/(epoch*50):.4f}, lr: {scheduler.get_last_lr()[0]:.8f}")
 
 if model_path is not None:
     torch.save(model.state_dict(), model_path)

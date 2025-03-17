@@ -18,13 +18,12 @@ except:
     ...
 
 for piece_name, piece_data in torch.load(starting_point):
-
     model.eval()
 
     for step in range(0, length):
         output = model(piece_data)
-        piece_data = output
+        piece_data = torch.vstack((piece_data, output[-1, :]))
 
-    torch.save([(piece_name[:-4] + "-generated.dat", piece_data)], starting_point[:-4] + piece_name[:-4] + "-generated.dat")
+    torch.save([(piece_name[:-4] + "-generated.mid", piece_data)], starting_point[:-4] + "-" + piece_name[:-4] + "-generated.dat")
 
 

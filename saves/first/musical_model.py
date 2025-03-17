@@ -5,22 +5,20 @@ class MusicalModel(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.rnn = nn.RNN(4, 64, 6)
+        self.rnn = nn.RNN(4, 20, 4)
 
         self.relu = nn.ReLU()
 
         self.flatten = nn.Flatten(0)
-        self.fc0 = nn.LazyLinear(512)
-        self.fc1 = nn.Linear(512, 4)
+        self.fc0 = nn.LazyLinear(20)
+        self.fc1 = nn.Linear(20, 4)
 
-        self.fc2 = nn.Linear(64, 512)
-        self.fc3 = nn.Linear(512, 4)
+        self.fc2 = nn.Linear(20, 4)
         
     def forward(self, x):
         out, hidden = self.rnn(x)
-        out = self.fc2(out)
         out = self.relu(out)
-        out = self.fc3(out)
+        out = self.fc2(out)
 
         flattened = self.flatten(hidden)
 
