@@ -37,3 +37,10 @@ def copy_files(src_dir, dest_dir, filter_substr = None):
         dest_path = os.path.join(dest_dir, fn)
 
         shutil.copy(src_path, dest_path)
+
+
+def directory_file_names_and_paths(directory):
+    return [
+        (file_name, os.path.join(directory, file_name))
+        for file_name in os.listdir(directory)
+    ]
