@@ -19,13 +19,23 @@ try:
 except:
     ...
 
-for piece_name, piece_data in torch.load(starting_point):
-    model.eval()
+piece_name, piece_data = torch.load(starting_point)[0]
 
-    for step in range(0, length):
-        output = model(piece_data.to(device))
-        piece_data = output
+model.eval()
 
-    torch.save([(piece_name[:-4] + "-generated.mid", piece_data)], starting_point[:-4] + "-" + piece_name[:-4] + "-generated.dat")
+for step in range(0, length):
+    output = model(piece_data.to(device))
+
+    last = piece_data[-1]
+    
+    print(last)
+    print(output)
+    output[1] = last[1] + output[1]
+
+    print(output)
+    piece_data = torch.vstack((piece_data.cpu(), output.cpu()))
+    print(piece_data)
+
+torch.save([(piece_name[:-4] + "-generated.mid", piece_data)], starting_point[:-4] + "-" + piece_name[:-4] + "-generated.dat")
 
 

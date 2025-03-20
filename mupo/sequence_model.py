@@ -12,11 +12,12 @@ class SequenceModel(Model):
 
         in_size = 3
         hidden_size = int(64 * (1 + math.log(seq_len) / 2))
+        n_layers = int(2 * (1 + math.log(seq_len) / 2))
         out_size = 3
         
         dropout_p = 1e-8
 
-        self.rnn = nn.RNN(in_size, hidden_size, dropout=dropout_p)
+        self.rnn = nn.RNN(in_size, hidden_size, n_layers, dropout=dropout_p)
         self.h2o = nn.Linear(hidden_size, out_size)
 
     def forward(self, x):
@@ -26,7 +27,8 @@ class SequenceModel(Model):
 
         if batched:
             hidden = hidden.permute((1, 0 ,2))
-        
-        out = self.h2o(hidden)
-
-        return out
+            out = self.h2o(hidden[:, -1, :])
+            return out
+        else:
+            out = self.h2o(hidden[-1, :])
+            return out
