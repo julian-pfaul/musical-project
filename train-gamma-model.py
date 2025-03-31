@@ -28,7 +28,7 @@ def main():
 
     data = torch.load(data_path)
     dataset = mupo.GammaDataset(data)
-    dataloader = utils.data.DataLoader(dataset, batch_size=512, shuffle=True)
+    dataloader = utils.data.DataLoader(dataset, batch_size=24, shuffle=True)
 
     model = mupo.GammaModel().to("cuda")
 
@@ -38,10 +38,10 @@ def main():
     criterion0 = nn.L1Loss()
     #criterion1 = nn.L1Loss()
    # criterion2 = nn.BCELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.00005)
+    optimizer = optim.Adam(model.parameters(), lr=0.00002)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2000, factor=0.75)
     
-    n_epochs = 6000
+    n_epochs = 20000
     
     plt.ion()
     
