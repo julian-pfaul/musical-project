@@ -9,7 +9,7 @@ import torch
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--destination", type=str, nargs=1, required=True, help="destination path of the model")
-    parser.add_argument("-t", "--type", type=str, nargs=1, choices=["hyper-model", "fallback-model", "sequence-model"], required=True, help="type of model to create")
+    parser.add_argument("-t", "--type", type=str, nargs=1, choices=["hyper-model", "fallback-model", "sequence-model", "mamba-model"], required=True, help="type of model to create")
     parser.add_argument("-sl", "--sequence-length", type=int, nargs='?', help="when type=sequence-model represent the sequence length of that model")
     
     args = parser.parse_args()
@@ -42,6 +42,9 @@ def main():
             torch.save(model, model_path)
         case "sequence-model":
             model = mupo.SequenceModel(seq_len)
+            torch.save(model, model_path)
+        case "mamba-model":
+            model = mupo.MambaModel()
             torch.save(model, model_path)
     
 

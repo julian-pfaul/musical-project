@@ -16,6 +16,9 @@ def main():
 
     parser.add_argument("-bs", "--batch-size", type=int, nargs="?", help="batch size used in training", default=64)
     parser.add_argument("-e", "--epochs", type=int, nargs="?", help="number of epochs in training", default=500)
+    parser.add_argument("-lr", "--learning-rate", type=float, nargs="?", help="used learning rate", default=1e-6)
+
+    parser.add_argument("-oi", "--output-interval", type=int, nargs="?", help="will give an output every nth epoch", default=10)
 
     parser.add_argument("-v", "--verbosity", type=str, nargs="?", default="normal", choices=["quite", "normal", "verbose", "debug"])
 
@@ -33,6 +36,8 @@ def main():
     seq_lens = args.sequence_lengths
     batch_size = args.batch_size
     n_epochs = args.epochs
+    lr = args.learning_rate
+    output_interval = args.output_interval
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -47,7 +52,7 @@ def main():
         for dataset_path in dataset_paths:
             for seq_len in seq_lens:
                 data = torch.load(dataset_path)
-                dataset = mupo.SequenceDataset(data, seq_len, device)
+                dataset = mupo.SequenceDataset(data, seq_len)
                 datasets.append(dataset)
 
                 del data
@@ -59,7 +64,7 @@ def main():
             for dataset_path in dataset_paths:
                 for seq_len in seq_lens:
                     data = torch.load(dataset_path)
-                    dataset = mupo.SequenceDataset(data, seq_len, device)
+                    dataset = mupo.SequenceDataset(data, seq_len)
                     datasets.append(dataset)
 
                     del data
@@ -75,21 +80,21 @@ def main():
     del dataset_paths
     del seq_lens
 
-    model = torch.load(model_path, weights_only=False).to(device)
+    model = torch.load(model_path, weights_only=False)
 
     n_epochs = n_epochs
 
-    criterion = torch.nn.MSELoss(reduction="mean")
-    optimizer = torch.optim.Adam(model.parameters())
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1000, factor=0.9)
+    criterion = torch.nn.L1Loss(reduction="mean")
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=200, factor=0.5)
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     if verbosity == "quite":
-        mupo.train(model, dataloader, n_epochs, criterion, optimizer, scheduler)
+        mupo.train(model, dataloader, n_epochs, criterion, optimizer, device="cuda")
     else:
         with ap.alive_bar(n_epochs, title="training", spinner=None) as bar:
-            mupo.train(model, dataloader, n_epochs, criterion, optimizer, scheduler, out_stream=sys.stdout, alive_bar=bar)
+            mupo.train(model, dataloader, n_epochs, criterion, optimizer, device="cuda", out_stream=sys.stdout, alive_bar=bar, output_interval=output_interval)
 
     torch.save(model, model_path)
 
