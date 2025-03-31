@@ -16,11 +16,8 @@ from .sequence_dataset import *
 
 from .train import *
 
-from .animation import *
-
 __all__ = [
         "alpha_model",
-        "animation.py",
         "beta_dataset",
         "beta_model",
         "conversion",
@@ -28,7 +25,7 @@ __all__ = [
         "gamma_dataset",
         "gamma_model",
         "hyper_model",
-        "model", 
+        "model",
         "sequence_dataset",
         "sequence_model",
         "train",
