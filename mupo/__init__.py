@@ -4,8 +4,6 @@ from .hyper_model import *
 from .fallback_model import *
 from .sequence_model import * 
 
-from .mamba_model import *
-
 from .alpha_model import *
 from .beta_model import *
 from .beta_dataset import *
@@ -29,8 +27,7 @@ __all__ = [
         "fallback_model",
         "gamma_dataset",
         "gamma_model",
-        "hyper_model", 
-        "mamba_model",
+        "hyper_model",
         "model", 
         "sequence_dataset",
         "sequence_model",
