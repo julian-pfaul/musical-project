@@ -28,7 +28,7 @@ def main():
 
     data = torch.load(data_path)
     dataset = mupo.GammaDataset(data)
-    dataloader = utils.data.DataLoader(dataset, batch_size=24, shuffle=True)
+    dataloader = utils.data.DataLoader(dataset, batch_size=64, shuffle=True)
 
     model = mupo.GammaModel().to("cuda")
 
@@ -38,10 +38,10 @@ def main():
     criterion0 = nn.L1Loss()
     #criterion1 = nn.L1Loss()
    # criterion2 = nn.BCELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.00002)
+    optimizer = optim.Adam(model.parameters(), lr=0.000001)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2000, factor=0.75)
     
-    n_epochs = 20000
+    n_epochs = 10000
     
     plt.ion()
     
@@ -141,10 +141,10 @@ def main():
 
                 plt.pause(0.01)
 
-                print(f"[{epoch}/{n_epochs}] loss: {loss.item()}, lr: {scheduler.get_last_lr()}, output: {outputs[0].cpu().detach()}, label: {labels[0].cpu().detach()}")
+                print(f"[{epoch}/{n_epochs}] loss: {loss.item()}, lr: {scheduler.get_last_lr()}, output: {outputs[0].cpu().detach()}, label: {labels[0].cpu().detach()}, seq_len: {dataset.seq_len}")
 
 
-            dataset.set_sequence_length(random.randint(1, 100))
+            dataset.set_sequence_length(random.randint(1, 4000))
 
             bar()
 

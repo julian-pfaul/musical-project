@@ -9,6 +9,7 @@ from .beta_model import *
 from .beta_dataset import *
 from .gamma_dataset import *
 from .gamma_model import *
+from .epsilon_model import *
 
 from .conversion import *
 
@@ -21,6 +22,7 @@ __all__ = [
         "beta_dataset",
         "beta_model",
         "conversion",
+        "epsilon_model",
         "fallback_model",
         "gamma_dataset",
         "gamma_model",
