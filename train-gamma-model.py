@@ -38,7 +38,7 @@ def main():
     criterion0 = nn.L1Loss()
     #criterion1 = nn.L1Loss()
    # criterion2 = nn.BCELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.000001)
+    optimizer = optim.Adam(model.parameters(), lr=0.0000001)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2000, factor=0.75)
     
     n_epochs = 10000
@@ -116,7 +116,9 @@ def main():
 
             #scheduler.step(double_averages[-1])
 
-            if epoch % 20 == 0:
+            if epoch % 100 == 0:
+                torch.save(model, f"workspace/model/gamma-model-epoch-{epoch}.dat")
+            if epoch % 4 == 0:
                 ax0l0.remove()
                 ax0l0, = ax0.plot(np.arange(len(losses[-1000:])), losses[-1000:], "k-")
                 ax0.relim()

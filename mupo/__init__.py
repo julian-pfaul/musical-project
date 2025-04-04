@@ -10,6 +10,10 @@ from .beta_dataset import *
 from .gamma_dataset import *
 from .gamma_model import *
 from .epsilon_model import *
+from .zeta_dataset import *
+from .zeta_model import *
+
+from .scaled_mae_loss import *
 
 from .conversion import *
 
@@ -28,10 +32,13 @@ __all__ = [
         "gamma_model",
         "hyper_model",
         "model",
+        "scaled_mae_loss",
         "sequence_dataset",
         "sequence_model",
         "train",
-        "utils"
+        "utils",
+        "zeta_dataset",
+        "zeta_model"
 ]
 
 assert __all__ == sorted(__all__)
