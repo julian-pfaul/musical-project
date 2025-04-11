@@ -48,7 +48,7 @@ class ZetaModel(nn.Module):
         out = self.seq0(out)
         out = self.seq1(out[:, -1, :]) # -> out : (B, 1)
 
-        out[:, 0] = out[:, 0] * (start_max / (1 + math.log(seq_len)))
+        out[:, 0] = out[:, 0] * (start_max / 92.0)
 
         return self.relu(out)
 

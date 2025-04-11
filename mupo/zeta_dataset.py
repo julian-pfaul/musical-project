@@ -28,12 +28,12 @@ class ZetaDataset(torch.utils.data.Dataset):
 
         #print(tensor)
 
-        sl = tensor.shape[0] - self.seq_len
+        #sl = tensor.shape[0] - self.seq_len
 
-        s = random.randint(0, sl-1)
+        #s = random.randint(0, sl-1)
         #print(s, sl)
 
-        seq = tensor[s:s+self.seq_len+1]
+        seq = tensor[:self.seq_len+1]
 
         second_to_last = seq[-2]
         last = seq[-1]

@@ -28,7 +28,7 @@ def main():
 
     data = torch.load(data_path)
     dataset = mupo.ZetaDataset(data)
-    dataloader = utils.data.DataLoader(dataset, batch_size=8, shuffle=False)
+    dataloader = utils.data.DataLoader(dataset, batch_size=80, shuffle=False)
 
     model = mupo.ZetaModel().to("cuda")
 
@@ -38,7 +38,7 @@ def main():
     criterion0 = nn.MSELoss()
     #criterion1 = nn.L1Loss()
    # criterion2 = nn.BCELoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.00001)
+    optimizer = optim.SGD(model.parameters(), lr=0.000001, momentum=0.9)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=100, factor=0.5)
     
     n_epochs = 10000
