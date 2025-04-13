@@ -30,18 +30,19 @@ def main():
 
     data = torch.load(data_path)
     dataset = mupo.KappaDataset(data)
-    dataloader = utils.data.DataLoader(dataset, batch_size=12, shuffle=True)
+    dataloader = utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
 
     if os.path.exists(model_path):
         model = torch.load(model_path, weights_only=False).cuda()
     else:
         model = mupo.KappaModel().cuda()
 
-    criterion = nn.L1Loss(reduction="mean")
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    criterion = nn.L1Loss(reduction="sum")
+    slice_criterion = nn.L1Loss(reduction="mean")
+    optimizer = optim.Adam(model.parameters(), lr=0.00005)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1600, factor=0.8)
-    
-    n_epochs = 8000
+
+    n_epochs = 4000
     
     plt.ion()
     
@@ -99,9 +100,9 @@ def main():
                 print("NaN detected in labels")
     
             loss = criterion(outputs, labels)
-            #loss.backward()
+            loss.backward()
     
-            #optimizer.step()
+            optimizer.step()
 
             first_avg = 800
 
@@ -111,15 +112,26 @@ def main():
             means.append(np.mean(np.array(losses[-first_avg*3:])))
             lrs.append(scheduler.get_last_lr()[0])
 
-            while len(for_lengths) <= dataset.sequence_length:
+            while len(for_lengths) < dataset.sequence_length:
                 for_lengths.append(0)
-
-            for_lengths[dataset.sequence_length] = loss.item()
 
             #scheduler.step(loss)
 
             if epoch % 500 == 0:
                 torch.save(model, f"{model_path[:-5]}-epoch-{epoch}.dat")
+            if epoch % 2 == 0:
+                outputs = outputs.cpu().detach()
+                labels = labels.cpu().detach()
+
+                for i in range(1, dataset.sequence_length):
+                    sliced_outputs = outputs[:, i, :]
+                    sliced_labels = labels[:, i, :]
+    
+                    sliced_loss = slice_criterion(sliced_outputs, sliced_labels)
+    
+                    for_lengths[i] = sliced_loss.item()
+
+                for_lengths[0] = for_lengths[1]
             if epoch % 2 == 0:
                 ax0l0.remove()
                 ax0l0, = ax0.plot(np.arange(len(losses[-first_avg:])), losses[-first_avg:], "k-")
@@ -148,10 +160,10 @@ def main():
                 print(f"[{epoch}/{n_epochs}] loss: {loss.item():.4f}, lr: {scheduler.get_last_lr()}, output: {outputs[0][-1].cpu().detach()}, label: {labels[0][-1].cpu().detach()}, seq_len: {dataset.sequence_length:}")
 
 
-            #dataset.sequence_length = random.randint(128, 128)
+            #dataset.sequence_length = random.randint(1, 2048+1024)
             #dataset.sequence_length %= 1024
             #dataset.sequence_length += 1
-            dataset.sequence_length = 1024
+            dataset.sequence_length = 2048+1024
 
             #if dataset.sequence_length <= 1:
             #    dataset.sequence_length = 4092

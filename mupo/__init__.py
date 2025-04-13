@@ -13,9 +13,9 @@ from .epsilon_model import *
 from .zeta_dataset import *
 from .zeta_model import *
 from .zeta_model_ii import *
-from .eta_model import *
-from .theta_model import *
-from .iota_model import *
+#from .eta_model import *
+#from .theta_model import *
+#from .iota_model import *
 from .kappa_dataset import *
 from .kappa_model import *
 
@@ -33,19 +33,19 @@ __all__ = [
         "beta_model",
         "conversion",
         "epsilon_model",
-        "eta_model",
+        #"eta_model",
         "fallback_model",
         "gamma_dataset",
         "gamma_model",
         "hyper_model",
-        "iota_model",
+        #"iota_model",
         "kappa_dataset",
         "kappa_model",
         "model",
         "scaled_mae_loss",
         "sequence_dataset",
         "sequence_model",
-        "theta_model",
+        #"theta_model",
         "train",
         "utils",
         "zeta_dataset",
