@@ -45,7 +45,7 @@ def main():
     else:
         model = mupo.KappaModel().cuda()
 
-    criterion = nn.L1Loss(reduction="sum")
+    criterion = nn.L1Loss(reduction="mean")
     slice_criterion = nn.L1Loss(reduction="mean")
     optimizer = optim.Adam(model.parameters(), lr=lr)
     #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1600, factor=0.8)
