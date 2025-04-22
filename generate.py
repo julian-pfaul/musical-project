@@ -51,7 +51,7 @@ def main():
 
     model.eval()
 
-    print(piece_data.shape)
+    #print(piece_data.shape)
 
     with alive_progress.alive_bar(iterations, title="iterations", spinner=None) as bar:
         for iteration in range(0, iterations):
@@ -66,7 +66,7 @@ def main():
                     case "lambda":
                         model_output = model(piece_data, True)
 
-                print(piece_data, model_output)
+                #print(piece_data, model_output)
 
                 if model_type == "kappa":
                     model_output = model_output[-1, :].unsqueeze(dim=0)
@@ -74,7 +74,11 @@ def main():
                 if model_type == "kappa-ii":
                     model_output = model_output.squeeze()
                     model_output = model_output[-1]
+                    model_output[0] = torch.round(model_output[0])
+                    model_output[1:] = torch.round(model_output[1:], decimals=4)
                     piece_data = piece_data.squeeze()
+
+                #print(model_output, piece_data)
 
                 piece_data = torch.vstack((piece_data, model_output))
    
@@ -87,7 +91,7 @@ def main():
 
     piece_data = piece_data.cpu()
 
-    print(piece_data.shape)
+    #print(piece_data.shape)
 
     if model_type == "kappa-ii":
         piece_data = piece_data.squeeze()
