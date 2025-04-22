@@ -15,7 +15,7 @@ def main():
 
     parser.add_argument("-i", "--iterations", type=int, required=True)
 
-    parser.add_argument("-mt", "--model-type", type=str, nargs="?", choices=["kappa", "lambda"], required=True)
+    parser.add_argument("-mt", "--model-type", type=str, nargs="?", choices=["kappa", "kappa-ii", "lambda"], required=True)
     
     args = parser.parse_args()
 
@@ -43,9 +43,15 @@ def main():
             del midi_data
 
     piece_data = piece_data.cuda()
+
+    if model_type == "kappa-ii":
+        piece_data = piece_data.unsqueeze(dim=0)
+
     model = model.cuda()
 
     model.eval()
+
+    print(piece_data.shape)
 
     with alive_progress.alive_bar(iterations, title="iterations", spinner=None) as bar:
         for iteration in range(0, iterations):
@@ -53,6 +59,8 @@ def main():
                 model_output = None
 
                 match model_type:
+                    case "kappa-ii":
+                        model_output = model(piece_data)
                     case "kappa":
                         model_output = model(piece_data)
                     case "lambda":
@@ -63,13 +71,26 @@ def main():
                 if model_type == "kappa":
                     model_output = model_output[-1, :].unsqueeze(dim=0)
     
+                if model_type == "kappa-ii":
+                    model_output = model_output.squeeze()
+                    model_output = model_output[-1]
+                    piece_data = piece_data.squeeze()
+
                 piece_data = torch.vstack((piece_data, model_output))
-    
+   
+                if model_type == "kappa-ii":
+                    piece_data = piece_data.unsqueeze(dim=0)
+
                 del model_output
     
             bar()
 
     piece_data = piece_data.cpu()
+
+    print(piece_data.shape)
+
+    if model_type == "kappa-ii":
+        piece_data = piece_data.squeeze()
 
     match mode:
         case "midi":
