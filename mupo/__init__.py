@@ -18,6 +18,8 @@ from .zeta_model_ii import *
 #from .iota_model import *
 from .kappa_dataset import *
 from .kappa_model import *
+from .lambda_dataset import *
+from .lambda_model import *
 
 from .scaled_mae_loss import *
 
@@ -41,6 +43,8 @@ __all__ = [
         #"iota_model",
         "kappa_dataset",
         "kappa_model",
+        "lambda_dataset",
+        "lambda_model",
         "model",
         "scaled_mae_loss",
         "sequence_dataset",

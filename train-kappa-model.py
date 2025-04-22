@@ -20,29 +20,50 @@ import random
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-dp", "--data-path", type=str, nargs=1, required=True)
-    parser.add_argument("-mp", "--model-path", type=str, nargs=1, required=True)
+    parser.add_argument("-dp", "--data-path", type=str, required=True)
+    parser.add_argument("-mp", "--model-path", type=str, required=True)
+
+    parser.add_argument("-mt", "--model-type", type=str, nargs="?", choices=["kappa", "lambda"], required=True)
+
+    parser.add_argument("-l", "--length", type=int, required=True)
 
     args = parser.parse_args()
 
-    data_path = args.data_path[0]
-    model_path = args.model_path[0]
+    data_path = args.data_path
+    model_path = args.model_path
+    model_type = args.model_type
+    length = args.length
 
     data = torch.load(data_path)
-    dataset = mupo.KappaDataset(data)
-    dataloader = utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
+
+    dataset = None
+
+    match model_type:
+        case "kappa":
+            dataset = mupo.KappaDataset(data)
+        case "lambda":
+            dataset = mupo.LambdaDataset(data)
+
+    dataloader = utils.data.DataLoader(dataset, batch_size=128, shuffle=True)
+
+    model = None
 
     if os.path.exists(model_path):
         model = torch.load(model_path, weights_only=False).cuda()
     else:
-        model = mupo.KappaModel().cuda()
+        match model_type:
+            case "kappa":
+                model = mupo.KappaModel().cuda()
+            case "lambda":
+                model = mupo.LambdaHyperModel(128).cuda()
 
-    criterion = nn.L1Loss(reduction="sum")
+    criterion = nn.L1Loss(reduction="mean")
     slice_criterion = nn.L1Loss(reduction="mean")
-    optimizer = optim.Adam(model.parameters(), lr=0.00005)
+    lr = 0.001
+    optimizer = optim.Adam(model.parameters(), lr=lr)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1600, factor=0.8)
 
-    n_epochs = 4000
+    n_epochs = 800
     
     plt.ion()
     
@@ -80,15 +101,35 @@ def main():
     for_lengths = []
     
     with ap.alive_bar(n_epochs, title="training", spinner=None) as bar:
+        model.train()
         for epoch in range(0, n_epochs):
+            if epoch % 50 == 0:
+                for param in model.parameters():
+                    if True in torch.isnan(param.data):
+                        model.module_list[dataset.sequence_length-1] = mupo.LambdaModel(dataset.sequence_length).cuda()
+                        print("RESET")
+
+            #dataset.sequence_length = random.randint(2, 24)
+            #dataset.sequence_length %= 1024
+            #dataset.sequence_length += 1
+            dataset.sequence_length = length
+
+            #if dataset.sequence_length <= 1:
+            #    dataset.sequence_length = 4092
+            #else:
+            #    dataset.sequence_length -= 1
+
+
             inputs, labels = next(iter(dataloader))
-            inputs = inputs.to("cuda")
-            labels = labels.to("cuda")
+            inputs = inputs.cuda()
+            labels = labels.cuda()
     
-            model.train()
+            #added = model.prepare(dataset.sequence_length)
+            #if added:
+            #    optimizer = optim.Adam(model.parameters(), lr=lr)
     
             optimizer.zero_grad()
-    
+
             outputs = model(inputs)
     
             #print(f"outputs: {outputs}")
@@ -104,7 +145,7 @@ def main():
     
             optimizer.step()
 
-            first_avg = 800
+            first_avg = 2000
 
             losses.append(loss.item())
             averages.append(np.median(np.array(losses[-first_avg*3:])))
@@ -118,21 +159,22 @@ def main():
             #scheduler.step(loss)
 
             if epoch % 500 == 0:
-                torch.save(model, f"{model_path[:-5]}-epoch-{epoch}.dat")
-            if epoch % 2 == 0:
-                outputs = outputs.cpu().detach()
-                labels = labels.cpu().detach()
+                model.eval()
+                torch.save(model, f"{model_path[:-4]}-epoch-{epoch}.dat")
+                model.train()
+            #if epoch % 2 == 0:
+                #outputs = outputs.cpu().detach()
+                #labels = labels.cpu().detach()
 
-                for i in range(1, dataset.sequence_length):
-                    sliced_outputs = outputs[:, i, :]
-                    sliced_labels = labels[:, i, :]
-    
-                    sliced_loss = slice_criterion(sliced_outputs, sliced_labels)
-    
-                    for_lengths[i] = sliced_loss.item()
+                #for i in range(1, dataset.sequence_length):
+                #    sliced_outputs = outputs[:, i, :]
+                #    sliced_labels = labels[:, i, :]
+                # 
+                #    sliced_loss = slice_criterion(sliced_outputs, sliced_labels)
+                #    for_lengths[i] = sliced_loss.item()
 
-                for_lengths[0] = for_lengths[1]
-            if epoch % 2 == 0:
+            for_lengths[dataset.sequence_length - 1] = loss.item()
+            if epoch % 10 == 0:
                 ax0l0.remove()
                 ax0l0, = ax0.plot(np.arange(len(losses[-first_avg:])), losses[-first_avg:], "k-")
                 ax0.relim()
@@ -157,21 +199,10 @@ def main():
 
                 plt.pause(0.01)
 
-                print(f"[{epoch}/{n_epochs}] loss: {loss.item():.4f}, lr: {scheduler.get_last_lr()}, output: {outputs[0][-1].cpu().detach()}, label: {labels[0][-1].cpu().detach()}, seq_len: {dataset.sequence_length:}")
-
-
-            #dataset.sequence_length = random.randint(1, 2048+1024)
-            #dataset.sequence_length %= 1024
-            #dataset.sequence_length += 1
-            dataset.sequence_length = 1024
-
-            #if dataset.sequence_length <= 1:
-            #    dataset.sequence_length = 4092
-            #else:
-            #    dataset.sequence_length -= 1
+                print(f"[{epoch}/{n_epochs}] loss: {loss.item():.4f}, lr: {scheduler.get_last_lr()}, output: {outputs[0].cpu().detach()}, label: {labels[0].cpu().detach()}, seq_len: {dataset.sequence_length:}")
 
             bar()
-
+    model.eval()
     torch.save(model, model_path)
 
 
