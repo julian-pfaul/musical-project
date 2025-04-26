@@ -20,6 +20,9 @@ from .kappa_dataset import *
 from .kappa_model import *
 from .lambda_dataset import *
 from .lambda_model import *
+from .lambda_model_ii import *
+
+from .mu import *
 
 from .scaled_mae_loss import *
 
@@ -45,7 +48,9 @@ __all__ = [
         "kappa_model",
         "lambda_dataset",
         "lambda_model",
+        "lambda_model_ii",
         "model",
+        "mu",
         "scaled_mae_loss",
         "sequence_dataset",
         "sequence_model",

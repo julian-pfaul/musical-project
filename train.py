@@ -18,14 +18,33 @@ import matplotlib.pyplot as plt
 
 import random
 
+def average_effective_lr(optimizer, original_lr):
+    total_lr = 0
+    count = 0
+    
+    for state in optimizer.state.values():
+        if 'step' in state and 'exp_avg' in state and 'exp_avg_sq' in state:
+            exp_avg = state['exp_avg']
+            exp_avg_sq = state['exp_avg_sq']
+            effective_lr = original_lr / (torch.sqrt(exp_avg_sq) + 1e-8)
+            total_lr += effective_lr.mean().item()
+            count += 1
+
+    average_effective_lr = total_lr / count if count > 0 else 0
+    
+    return average_effective_lr
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-dp", "--data-path", type=str, required=True)
     parser.add_argument("-mp", "--model-path", type=str, required=True)
 
-    parser.add_argument("-mt", "--model-type", type=str, nargs="?", choices=["kappa", "lambda"], required=True)
+    parser.add_argument("-mt", "--model-type", type=str, nargs="?", choices=["kappa", "lambda", "lambda-ii", "mu"], required=True)
 
     parser.add_argument("-l", "--length", type=int, required=True)
+
+    parser.add_argument("-ai", "--animation-interval", type=int, nargs="?", default=10)
 
     args = parser.parse_args()
 
@@ -34,17 +53,28 @@ def main():
     model_type = args.model_type
     length = args.length
 
+    animation_interval = args.animation_interval
+
     data = torch.load(data_path)
 
     dataset = None
+
+    meta_data = None
+
+    if model_type == "mu":
+        meta_data = mupo.MuMetaData()
 
     match model_type:
         case "kappa":
             dataset = mupo.KappaDataset(data)
         case "lambda":
             dataset = mupo.LambdaDataset(data)
+        case "lambda-ii":
+            dataset = mupo.LambdaDataset(data)
+        case "mu":
+            dataset = mupo.MuDataset(data, meta_data)
 
-    dataloader = utils.data.DataLoader(dataset, batch_size=128, shuffle=True)
+    dataloader = utils.data.DataLoader(dataset, batch_size=256, shuffle=True)
 
     model = None
 
@@ -56,14 +86,18 @@ def main():
                 model = mupo.KappaModel().cuda()
             case "lambda":
                 model = mupo.LambdaHyperModel(128).cuda()
+            case "lambda-ii":
+                model = mupo.LambdaHyperModelII(128).cuda()
+            case "mu":
+                model = mupo.MuHyperModel(meta_data, 128).cuda()
 
-    criterion = nn.L1Loss(reduction="mean")
+    criterion = nn.MSELoss(reduction="mean")
     slice_criterion = nn.L1Loss(reduction="mean")
-    lr = 0.001
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1600, factor=0.8)
+    original_lr = 0.005
+    optimizer = optim.Adam(model.parameters(),lr=original_lr)
+    #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1600, factor=0.8)
 
-    n_epochs = 800
+    n_epochs = 10000
     
     plt.ion()
     
@@ -103,7 +137,7 @@ def main():
     with ap.alive_bar(n_epochs, title="training", spinner=None) as bar:
         model.train()
         for epoch in range(0, n_epochs):
-            if epoch % 50 == 0:
+            if epoch % 400 == 0:
                 for param in model.parameters():
                     if True in torch.isnan(param.data):
                         model.module_list[dataset.sequence_length-1] = mupo.LambdaModel(dataset.sequence_length).cuda()
@@ -145,13 +179,16 @@ def main():
     
             optimizer.step()
 
-            first_avg = 2000
+            first_avg = 1000
 
             losses.append(loss.item())
             averages.append(np.median(np.array(losses[-first_avg*3:])))
             double_averages.append(np.median(np.array(averages[-first_avg*5:])))
             means.append(np.mean(np.array(losses[-first_avg*3:])))
-            lrs.append(scheduler.get_last_lr()[0])
+
+            lr = average_effective_lr(optimizer, original_lr)
+
+            lrs.append(lr)
 
             while len(for_lengths) < dataset.sequence_length:
                 for_lengths.append(0)
@@ -174,7 +211,7 @@ def main():
                 #    for_lengths[i] = sliced_loss.item()
 
             for_lengths[dataset.sequence_length - 1] = loss.item()
-            if epoch % 10 == 0:
+            if epoch % animation_interval == 0:
                 ax0l0.remove()
                 ax0l0, = ax0.plot(np.arange(len(losses[-first_avg:])), losses[-first_avg:], "k-")
                 ax0.relim()
@@ -188,7 +225,7 @@ def main():
                 ax1.autoscale_view()    
 
                 ax2l0.remove()
-                ax2l0, = ax2.plot(np.arange(len(lrs)), lrs, "k-")
+                ax2l0, = ax2.plot(np.arange(len(lrs[-first_avg:])), lrs[-first_avg:], "k-")
                 ax2.relim()
                 ax2.autoscale_view()
 
@@ -199,7 +236,11 @@ def main():
 
                 plt.pause(0.01)
 
-                print(f"[{epoch}/{n_epochs}] loss: {loss.item():.4f}, lr: {scheduler.get_last_lr()}, output: {outputs[0].cpu().detach()}, label: {labels[0].cpu().detach()}, seq_len: {dataset.sequence_length:}")
+                if model_type == "mu":
+                    outputs = model.format(outputs.detach())
+                    labels = model.format(labels.detach())
+
+                print(f"[{epoch}/{n_epochs}] loss: {loss.item():.4f}, lr: {lr}, output: {outputs[0].cpu().detach()}, label: {labels[0].cpu().detach()}, seq_len: {dataset.sequence_length:}")
 
             bar()
     model.eval()
