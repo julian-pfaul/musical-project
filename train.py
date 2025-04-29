@@ -40,18 +40,33 @@ def main():
     parser.add_argument("-dp", "--data-path", type=str, required=True)
     parser.add_argument("-mp", "--model-path", type=str, required=True)
 
-    parser.add_argument("-mt", "--model-type", type=str, nargs="?", choices=["kappa", "lambda", "lambda-ii", "mu"], required=True)
+    parser.add_argument("-mt", "--model-type", type=str, nargs="?", choices=["kappa", "lambda", "lambda-ii", "mu", "nu"], required=True)
+    parser.add_argument("-sv", "--sub-version", type=str, nargs="?", choices=["i", "ii"], default="i")
 
     parser.add_argument("-l", "--length", type=int, required=True)
 
     parser.add_argument("-ai", "--animation-interval", type=int, nargs="?", default=10)
+
+    parser.add_argument("-t", "--temperature", type=float, nargs="?", default=1.0)
+
+    parser.add_argument("-e", "--epochs", type=int, nargs="?", default=8000)
+    parser.add_argument("-lr", "--learning-rate", type=float, nargs="?", default=0.01)
+    parser.add_argument("-bs", "--batch-size", type=int, nargs="?", default=64)
+
+    parser.add_argument("-v", "--view-size", type=int, nargs="?", default=200)
 
     args = parser.parse_args()
 
     data_path = args.data_path
     model_path = args.model_path
     model_type = args.model_type
+    sub_version = args.sub_version
     length = args.length
+    temperature = args.temperature
+    epochs = args.epochs
+    learning_rate = args.learning_rate
+    view_size = args.view_size
+    batch_size = args.batch_size
 
     animation_interval = args.animation_interval
 
@@ -63,6 +78,12 @@ def main():
 
     if model_type == "mu":
         meta_data = mupo.MuMetaData()
+    elif model_type == "nu":
+        match sub_version:
+            case "i":
+                meta_data = mupo.NuMetaData()
+            case "ii":
+                meta_data = mupo.NuMetaDataII()
 
     match model_type:
         case "kappa":
@@ -73,8 +94,14 @@ def main():
             dataset = mupo.LambdaDataset(data)
         case "mu":
             dataset = mupo.MuDataset(data, meta_data)
+        case "nu":
+            match sub_version:
+                case "i":
+                    dataset = mupo.NuDataset(data, meta_data, length)
+                case "ii":
+                    dataset = mupo.NuDatasetII(data, meta_data, length)
 
-    dataloader = utils.data.DataLoader(dataset, batch_size=256, shuffle=True)
+    dataloader = utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     model = None
 
@@ -90,14 +117,20 @@ def main():
                 model = mupo.LambdaHyperModelII(128).cuda()
             case "mu":
                 model = mupo.MuHyperModel(meta_data, 128).cuda()
+            case "nu":
+                match sub_version:
+                    case "i":
+                        model = mupo.NuModel(meta_data, length).cuda()
+                    case "ii":
+                          model = mupo.NuModelII(meta_data, length).cuda()
 
     criterion = nn.MSELoss(reduction="mean")
     slice_criterion = nn.L1Loss(reduction="mean")
-    original_lr = 0.005
+    original_lr = learning_rate
     optimizer = optim.Adam(model.parameters(),lr=original_lr)
-    #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1600, factor=0.8)
+    #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=100, factor=0.5)
 
-    n_epochs = 10000
+    n_epochs = epochs
     
     plt.ion()
     
@@ -153,7 +186,6 @@ def main():
             #else:
             #    dataset.sequence_length -= 1
 
-
             inputs, labels = next(iter(dataloader))
             inputs = inputs.cuda()
             labels = labels.cuda()
@@ -164,7 +196,12 @@ def main():
     
             optimizer.zero_grad()
 
-            outputs = model(inputs)
+            outputs = None
+
+            if model_type == "nu" and sub_version == "ii":
+                outputs = model(inputs, temperature)
+            else:
+                outputs = model(inputs)
     
             #print(f"outputs: {outputs}")
             #print(f"labels: {labels}")
@@ -179,7 +216,7 @@ def main():
     
             optimizer.step()
 
-            first_avg = 1000
+            first_avg = view_size
 
             losses.append(loss.item())
             averages.append(np.median(np.array(losses[-first_avg*3:])))
@@ -187,7 +224,7 @@ def main():
             means.append(np.mean(np.array(losses[-first_avg*3:])))
 
             lr = average_effective_lr(optimizer, original_lr)
-
+            #lr = scheduler.get_last_lr()[0]
             lrs.append(lr)
 
             while len(for_lengths) < dataset.sequence_length:
@@ -225,7 +262,7 @@ def main():
                 ax1.autoscale_view()    
 
                 ax2l0.remove()
-                ax2l0, = ax2.plot(np.arange(len(lrs[-first_avg:])), lrs[-first_avg:], "k-")
+                ax2l0, = ax2.plot(np.arange(len(lrs[-first_avg*8:])), lrs[-first_avg*8:], "k-")
                 ax2.relim()
                 ax2.autoscale_view()
 
@@ -236,9 +273,13 @@ def main():
 
                 plt.pause(0.01)
 
-                if model_type == "mu":
+                if model_type == "mu" or model_type == "nu":
                     outputs = model.format(outputs.detach())
                     labels = model.format(labels.detach())
+
+                #print(f"{outputs[-1]}"
+
+                
 
                 print(f"[{epoch}/{n_epochs}] loss: {loss.item():.4f}, lr: {lr}, output: {outputs[0].cpu().detach()}, label: {labels[0].cpu().detach()}, seq_len: {dataset.sequence_length:}")
 

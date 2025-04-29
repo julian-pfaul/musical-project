@@ -24,6 +24,8 @@ from .lambda_model_ii import *
 
 from .mu import *
 
+from .nu import *
+
 from .scaled_mae_loss import *
 
 from .conversion import *
@@ -51,6 +53,7 @@ __all__ = [
         "lambda_model_ii",
         "model",
         "mu",
+        "nu",
         "scaled_mae_loss",
         "sequence_dataset",
         "sequence_model",
