@@ -15,7 +15,7 @@ def main():
 
     parser.add_argument("-i", "--iterations", type=int, required=True)
 
-    parser.add_argument("-mt", "--model-type", type=str, nargs="?", choices=["kappa", "kappa-ii", "lambda", "mu", "nu"], required=True)
+    parser.add_argument("-mt", "--model-type", type=str, nargs="?", choices=["kappa", "kappa-ii", "lambda", "mu", "nu", "omicron"], required=True)
 
     parser.add_argument("-t", "--temperature", type=float, nargs="?", default=1.0)
     
@@ -48,7 +48,7 @@ def main():
 
     piece_data = piece_data.cuda()
 
-    if model_type == "kappa-ii" or model_type == "mu" or model_type == "nu":
+    if model_type == "kappa-ii" or model_type == "mu" or model_type == "nu" or model_type == "omicron":
         piece_data = piece_data.unsqueeze(dim=0)
 
     model = model.cuda()
@@ -74,6 +74,9 @@ def main():
                     case "nu":
                         input_data = piece_data[:, -model.length:, :]
                         model_output = model(input_data, temperature)
+                    case "omicron":
+                        input_data = piece_data[:, -model.meta_data.mw_size:, :]
+                        model_output = model(input_data)
 
                 #print(piece_data, model_output)
 
@@ -98,12 +101,16 @@ def main():
 
                         model_output = model_output.squeeze()
                         piece_data = piece_data.squeeze()
+                    case "omicron":
+                        model_output = model_output.squeeze()
+                        piece_data = piece_data.squeeze()
+
 
                 #print(model_output, piece_data)
 
                 piece_data = torch.vstack((piece_data, model_output))
    
-                if model_type == "kappa-ii" or model_type == "mu" or model_type == "nu":
+                if model_type == "kappa-ii" or model_type == "mu" or model_type == "nu" or model_type == "omicron":
                     piece_data = piece_data.unsqueeze(dim=0)
 
                 del model_output
@@ -114,7 +121,7 @@ def main():
 
     #print(piece_data.shape)
 
-    if model_type == "kappa-ii" or model_type == "mu" or model_type == "nu":
+    if model_type == "kappa-ii" or model_type == "mu" or model_type == "nu" or model_type == "omicron":
         piece_data = piece_data.squeeze()
 
     match mode:

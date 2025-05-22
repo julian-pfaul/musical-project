@@ -26,6 +26,8 @@ from .mu import *
 
 from .nu import *
 
+from .omicron import *
+
 from .scaled_mae_loss import *
 
 from .conversion import *
@@ -54,6 +56,7 @@ __all__ = [
         "model",
         "mu",
         "nu",
+        "omicron",
         "scaled_mae_loss",
         "sequence_dataset",
         "sequence_model",

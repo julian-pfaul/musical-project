@@ -40,8 +40,8 @@ def main():
     parser.add_argument("-dp", "--data-path", type=str, required=True)
     parser.add_argument("-mp", "--model-path", type=str, required=True)
 
-    parser.add_argument("-mt", "--model-type", type=str, nargs="?", choices=["kappa", "lambda", "lambda-ii", "mu", "nu"], required=True)
-    parser.add_argument("-sv", "--sub-version", type=str, nargs="?", choices=["i", "ii"], default="i")
+    parser.add_argument("-mt", "--model-type", type=str, nargs="?", choices=["kappa", "lambda", "lambda-ii", "mu", "nu", "omicron"], required=True)
+    parser.add_argument("-sv", "--sub-version", type=str, nargs="?", choices=["i", "ii", "iii"], default="i")
 
     parser.add_argument("-l", "--length", type=int, required=True)
 
@@ -84,6 +84,8 @@ def main():
                 meta_data = mupo.NuMetaData()
             case "ii":
                 meta_data = mupo.NuMetaDataII()
+            case "iii":
+                meta_data = mupo.NuMetaDataIII()
 
     match model_type:
         case "kappa":
@@ -100,6 +102,10 @@ def main():
                     dataset = mupo.NuDataset(data, meta_data, length)
                 case "ii":
                     dataset = mupo.NuDatasetII(data, meta_data, length)
+                case "iii":
+                    dataset = mupo.NuDatasetIII(data, meta_data, length)
+        case "omicron":
+            dataset = mupo.OmicronDataset(data)
 
     dataloader = utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
@@ -123,11 +129,15 @@ def main():
                         model = mupo.NuModel(meta_data, length).cuda()
                     case "ii":
                           model = mupo.NuModelII(meta_data, length).cuda()
+                    case "iii":
+                          model = mupo.NuModelIII(meta_data, length).cuda()
+            case "omicron":
+                model = mupo.OmicronModel().cuda()
 
-    criterion = nn.MSELoss(reduction="mean")
+    criterion = nn.L1Loss(reduction="mean")
     slice_criterion = nn.L1Loss(reduction="mean")
     original_lr = learning_rate
-    optimizer = optim.Adam(model.parameters(),lr=original_lr)
+    optimizer = optim.Adam(model.parameters(), lr=original_lr)
     #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=100, factor=0.5)
 
     n_epochs = epochs

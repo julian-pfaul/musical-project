@@ -531,3 +531,278 @@ class NuModelII(nn.Module):
 
         return last.cuda()
 
+###
+###
+###
+
+
+class NuDatasetIII(torch.utils.data.Dataset):
+    def __init__(self, data, meta_data, sequence_length):
+        super().__init__()
+
+        self.data = []
+        self.meta_data = meta_data
+        self.sequence_length = sequence_length
+
+        for _, piece_tensor in data:
+            self.data.append(piece_tensor)
+
+    def __len__(self):
+        return len([tensor for tensor in self.data if tensor.shape[0] > self.sequence_length])
+
+    def __getitem__(self, idx):
+        pieces = [piece for piece in self.data if piece.shape[0] > self.sequence_length]
+
+        piece = pieces[idx]
+
+        offset = random.randint(0, piece.shape[0] - self.sequence_length - 1)
+        inputs = piece[offset:self.sequence_length+offset]
+
+        second_to_last = piece[self.sequence_length+offset-2]
+        last = piece[self.sequence_length+offset-1]
+        unknown = piece[self.sequence_length+offset]
+
+        pitch_delta = int((unknown[0] - last[0]).item())
+        time_ratio_i = ((unknown[1] - last[1]) / second_to_last[2]).item()
+        time_ratio_ii = (unknown[2] / second_to_last[2]).item()
+
+        direction = np.sign(pitch_delta)
+        octave = 12.0
+        octaves = 0
+
+        tmp = pitch_delta
+
+        while abs(pitch_delta) >= octave or pitch_delta < 0:
+            pitch_delta -= octave * direction
+            octaves += 1
+
+        if octaves == 0:
+            direction = 0
+
+        #print(tmp, octaves, pitch_delta, direction)
+
+        interval = abs(pitch_delta)
+
+        interval_pd = probability_distribution(self.meta_data.intervals, interval)
+        direction_pd = probability_distribution(self.meta_data.interval_directions, direction)
+        octave_pd = probability_distribution(self.meta_data.interval_octaves, octaves)
+        time_ratio_i_pd = probability_distribution(self.meta_data.time_ratios_i, time_ratio_i)
+        time_ratio_ii_pd = probability_distribution(self.meta_data.time_ratios_ii, time_ratio_ii)
+
+        #print(interval_pd, direction_pd, octave_pd, time_ratio_i_pd, time_ratio_ii_pd)
+
+        labels = torch.hstack((interval_pd, direction_pd, octave_pd, time_ratio_i_pd, time_ratio_ii_pd))
+
+        return inputs, labels
+
+class NuMetaDataIII:
+    def __init__(self):
+        self.intervals = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        self.interval_directions = [1, 0, -1]
+        self.interval_octaves = [1, 2]
+
+        self.time_ratios_i = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 6.0, 8.0]
+        self.time_ratios_ii = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 6.0, 8.0]
+
+
+class NuSelectorModelIII(nn.Module):
+    def __init__(self, list_data, sequence_length):
+        super().__init__()
+
+        self.list_data = list_data # of type NuMetaData
+        self.length = sequence_length
+
+        in_channels = 32
+        hidden_channels = 64
+        conv_kernel_size = 2
+        pool_kernel_size = 4
+
+        features = len(self.list_data)
+
+        self.h = nn.LazyLinear(in_channels)
+
+        self.conv0 = nn.Conv1d(in_channels, hidden_channels, conv_kernel_size, padding="same") # (B, C, L) -> (B, C, L)
+        self.norm0 = nn.BatchNorm1d(hidden_channels) # (B, C, L) -> (B, C, L)
+        self.pool0 = nn.MaxPool1d(pool_kernel_size) # (B, C, L) -> (B, C, L/4)
+        self.conv1 = nn.Conv1d(hidden_channels, hidden_channels, conv_kernel_size, padding="same") # (B, C, L) -> (B, C, L)
+        self.norm1 = nn.BatchNorm1d(hidden_channels)
+        self.pool1 = nn.MaxPool1d(pool_kernel_size) # (B, C, L) -> (B, C, L/4)
+
+        self.proj0 = nn.Linear(hidden_channels, features)
+        self.proj1 = nn.LazyLinear(1)
+
+        self.relu = nn.ReLU()
+        self.leaky_relu = nn.LeakyReLU()
+
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, ipt, temperature=1.0):
+        # ipt : (B, L, C)
+
+        x = self.h(ipt)
+
+        x = x.permute((0, 2, 1)) # (B, L, C) -> (B, C, L)
+
+        out = self.conv0(x)
+        out = self.norm0(out)
+        out = self.relu(out)
+        out = self.pool0(out)
+
+        out = self.conv1(out)
+        out = self.norm1(out)
+        out = self.relu(out)
+        out = self.pool1(out)
+
+        # out : (B, C, L)
+
+        out = out.permute((0, 2, 1)) # (B, C, L) -> (B, L, C)
+        out = self.proj0(out)
+        out = self.leaky_relu(out)
+        out = out.permute((0, 2, 1)) # (B, L, C) -> (B, C, L)
+        out = self.proj1(out)
+        out = self.leaky_relu(out)
+        out = out.permute((0, 2, 1)) # (B, C, L) -> (B, L, C)
+
+        out = out.squeeze(dim=1) # (B, C)
+
+        out = out / temperature
+        out = self.softmax(out[:, :])
+
+        return out
+
+    def format(self, x):
+        selected_list = []
+
+        p = False
+        for batch in x:
+            top_values, top_indices = torch.topk(batch, k=int(len(self.list_data) / 2))
+
+            chosen_index = random.choices(
+                [i for i in top_indices],
+                weights=[c for c in top_values],
+                k=1
+            )[0]
+
+            if not p:
+                #print(batch)
+                #print(top_values)
+                #print(top_indices)
+                #print("selected: ", self.list_data[chosen_index], chosen_index.item(), batch[chosen_index].item())
+                p = True
+
+            selected = torch.tensor(self.list_data[chosen_index])
+            selected_list.append(selected)
+
+        #print(selected_list)
+
+        out = torch.stack(selected_list).unsqueeze(dim=1)
+
+        #print(out)
+        return out
+
+class NuModelIII(nn.Module):
+    def __init__(self, meta_data, sequence_length):
+        super().__init__()
+
+        self.meta_data = meta_data
+        self.length = sequence_length
+
+        self.interval_selector = NuSelectorModelIII(self.meta_data.intervals, self.length)
+        self.interval_direction_selector = NuSelectorModelIII(self.meta_data.interval_directions, self.length)
+        self.interval_octave_selector = NuSelectorModelIII(self.meta_data.interval_octaves, self.length)
+        self.time_ratio_selector_i = NuSelectorModelIII(self.meta_data.time_ratios_i, self.length)
+        self.time_ratio_selector_ii = NuSelectorModelIII(self.meta_data.time_ratios_ii, self.length)
+
+    def forward(self, x, temperature=1.0):
+        next_x = x
+
+        interval_out = self.interval_selector(next_x, temperature)
+
+        #print(x.shape)
+        #print(interval_out.shape)
+        #print(interval_out.unsqueeze(dim=1).repeat(1, self.length, 1).shape)
+
+        next_x = torch.dstack((x, interval_out.unsqueeze(dim=1).repeat(1, self.length, 1)))
+
+        interval_direction_out = self.interval_direction_selector(next_x, temperature)
+        next_x = torch.dstack((
+            x,
+            interval_out.unsqueeze(dim=1).repeat(1, self.length, 1),
+            interval_direction_out.unsqueeze(dim=1).repeat(1, self.length, 1)
+        ))
+
+        interval_octave_out = self.interval_octave_selector(next_x, temperature)
+        next_x = torch.dstack((
+            x,
+            interval_out.unsqueeze(dim=1).repeat(1, self.length, 1),
+            interval_direction_out.unsqueeze(dim=1).repeat(1, self.length, 1),
+            interval_octave_out.unsqueeze(dim=1).repeat(1, self.length, 1)
+        ))
+
+        time_ratio_out_i = self.time_ratio_selector_i(next_x, temperature)
+        next_x = torch.dstack((
+            x,
+            interval_out.unsqueeze(dim=1).repeat(1, self.length, 1),
+            interval_direction_out.unsqueeze(dim=1).repeat(1, self.length, 1),
+            interval_octave_out.unsqueeze(dim=1).repeat(1, self.length, 1),
+            time_ratio_out_i.unsqueeze(dim=1).repeat(1, self.length, 1)
+        ))
+
+        time_ratio_out_ii = self.time_ratio_selector_ii(next_x, temperature)
+
+        out = torch.hstack((interval_out, interval_direction_out, interval_octave_out, time_ratio_out_i, time_ratio_out_ii))
+
+        return out
+
+    def format(self, x):
+        interval_selector_list_length = len(self.interval_selector.list_data)
+        interval_direction_selector_list_length = len(self.interval_direction_selector.list_data)
+        interval_octave_selector_list_length = len(self.interval_octave_selector.list_data)
+        time_ratio_selector_i_list_length = len(self.time_ratio_selector_i.list_data)
+        time_ratio_selector_ii_list_length = len(self.time_ratio_selector_ii.list_data)
+
+        index_accumulator = 0
+
+        interval_section = x[:, index_accumulator:index_accumulator+interval_selector_list_length]
+        index_accumulator += interval_selector_list_length
+
+        interval_direction_section = x[:, index_accumulator:index_accumulator+interval_direction_selector_list_length]
+        index_accumulator += interval_direction_selector_list_length
+
+        interval_octave_section = x[:, index_accumulator:index_accumulator+interval_octave_selector_list_length]
+        index_accumulator += interval_octave_selector_list_length
+
+        time_ratio_i_section = x[:, index_accumulator:index_accumulator+time_ratio_selector_i_list_length]
+        index_accumulator += time_ratio_selector_i_list_length
+
+        time_ratio_ii_section = x[:, index_accumulator:index_accumulator+time_ratio_selector_ii_list_length]
+
+        intervals = self.interval_selector.format(interval_section)
+        interval_directions = self.interval_direction_selector.format(interval_direction_section)
+        interval_octaves = self.interval_octave_selector.format(interval_octave_section)
+        time_ratios_i = self.time_ratio_selector_i.format(time_ratio_i_section)
+        time_ratios_ii = self.time_ratio_selector_ii.format(time_ratio_ii_section)
+
+        pitch_deltas = intervals + 12.0 * interval_octaves * interval_directions
+        start_delta_ratios = time_ratios_i
+        duration_ratios = time_ratios_ii
+
+        return torch.hstack((pitch_deltas, start_delta_ratios, duration_ratios)).cuda()
+
+    def apply_transformation(self, transformation, x, musescore=True):
+        second_to_last = x[:, -2, :]
+        last = x[:, -1, :].clone()
+
+        m = 0 if not musescore else 0.0010 # weird time correction only needed for MIDIs generated by musescore
+
+        print(transformation)
+        print(last)
+
+        last[:, 0] += transformation[:, 0]
+        last[:, 1] += (second_to_last[:, 2] + m) * transformation[:, 1]
+        last[:, 2] = second_to_last[:, 2] * transformation[:, 2]
+
+        print(last)
+
+        return last.cuda()
+
