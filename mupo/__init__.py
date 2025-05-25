@@ -28,6 +28,11 @@ from .nu import *
 
 from .omicron import *
 
+from .pi import *
+from .pi_ii import *
+
+from .rho import *
+
 from .scaled_mae_loss import *
 
 from .conversion import *
@@ -57,6 +62,9 @@ __all__ = [
         "mu",
         "nu",
         "omicron",
+        "pi",
+        "pi_ii",
+        "rho",
         "scaled_mae_loss",
         "sequence_dataset",
         "sequence_model",

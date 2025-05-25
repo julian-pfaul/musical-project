@@ -7,6 +7,8 @@ import argparse
 
 import alive_progress as ap
 
+from tqdm import tqdm
+
 import mupo
 
 import numpy as np
@@ -34,13 +36,14 @@ def average_effective_lr(optimizer, original_lr):
     
     return average_effective_lr
 
+print = tqdm.write
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-dp", "--data-path", type=str, required=True)
     parser.add_argument("-mp", "--model-path", type=str, required=True)
 
-    parser.add_argument("-mt", "--model-type", type=str, nargs="?", choices=["kappa", "lambda", "lambda-ii", "mu", "nu", "omicron"], required=True)
+    parser.add_argument("-mt", "--model-type", type=str, nargs="?", choices=["kappa", "lambda", "lambda-ii", "mu", "nu", "omicron", "pi", "rho"], required=True)
     parser.add_argument("-sv", "--sub-version", type=str, nargs="?", choices=["i", "ii", "iii"], default="i")
 
     parser.add_argument("-l", "--length", type=int, required=True)
@@ -67,6 +70,9 @@ def main():
     learning_rate = args.learning_rate
     view_size = args.view_size
     batch_size = args.batch_size
+
+    hidden_size = 512
+    num_layers = 6
 
     animation_interval = args.animation_interval
 
@@ -106,6 +112,12 @@ def main():
                     dataset = mupo.NuDatasetIII(data, meta_data, length)
         case "omicron":
             dataset = mupo.OmicronDataset(data)
+        case "pi":
+            dataset = mupo.PiDataset(data)
+            dataset.seq_len = length
+        case "rho":
+            dataset = mupo.PiDataset(data)
+            dataset.seq_len = length
 
     dataloader = utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
@@ -133,9 +145,13 @@ def main():
                           model = mupo.NuModelIII(meta_data, length).cuda()
             case "omicron":
                 model = mupo.OmicronModel().cuda()
+            case "pi":
+                model = mupo.DeepResidualGRU(3, hidden_size, 3, num_layers).cuda()
+            case "rho":
+                model = mupo.Rho().cuda()
 
-    criterion = nn.L1Loss(reduction="mean")
-    slice_criterion = nn.L1Loss(reduction="mean")
+    criterion = nn.L1Loss(reduction="sum")
+    slice_criterion = nn.L1Loss(reduction="sum")
     original_lr = learning_rate
     optimizer = optim.Adam(model.parameters(), lr=original_lr)
     #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=100, factor=0.5)
@@ -177,34 +193,38 @@ def main():
     lrs = []
     for_lengths = []
     
-    with ap.alive_bar(n_epochs, title="training", spinner=None) as bar:
+
+    for epoch in tqdm(range(0, n_epochs)):
         model.train()
-        for epoch in range(0, n_epochs):
-            if epoch % 400 == 0:
-                for param in model.parameters():
-                    if True in torch.isnan(param.data):
-                        model.module_list[dataset.sequence_length-1] = mupo.LambdaModel(dataset.sequence_length).cuda()
-                        print("RESET")
 
-            #dataset.sequence_length = random.randint(2, 24)
-            #dataset.sequence_length %= 1024
-            #dataset.sequence_length += 1
-            dataset.sequence_length = length
+        if epoch % 400 == 0:
+            for param in model.parameters():
+                if True in torch.isnan(param.data):
+                    model.module_list[dataset.sequence_length-1] = mupo.LambdaModel(dataset.sequence_length).cuda()
+                    print("RESET")
 
-            #if dataset.sequence_length <= 1:
-            #    dataset.sequence_length = 4092
-            #else:
-            #    dataset.sequence_length -= 1
+        #dataset.sequence_length = random.randint(2, 24)
+        #dataset.sequence_length %= 1024
+        #dataset.sequence_length += 1
+        dataset.sequence_length = length
 
-            inputs, labels = next(iter(dataloader))
+        #if dataset.sequence_length <= 1:
+        #    dataset.sequence_length = 4092
+        #else:
+        #    dataset.sequence_length -= 1
+
+        batch_iterator = tqdm(dataloader)
+
+        for index, batch in enumerate(batch_iterator):
+            inputs, labels = batch
             inputs = inputs.cuda()
             labels = labels.cuda()
-    
+
+            #print(f"{inputs}, {labels}")
+
             #added = model.prepare(dataset.sequence_length)
             #if added:
             #    optimizer = optim.Adam(model.parameters(), lr=lr)
-    
-            optimizer.zero_grad()
 
             outputs = None
 
@@ -212,19 +232,20 @@ def main():
                 outputs = model(inputs, temperature)
             else:
                 outputs = model(inputs)
-    
+
             #print(f"outputs: {outputs}")
             #print(f"labels: {labels}")
-    
+
             if torch.isnan(outputs).any() or torch.isinf(outputs).any():
                 print("NaN detected in outputs")
             if torch.isnan(labels).any() or torch.isinf(labels).any():
                 print("NaN detected in labels")
-    
+
             loss = criterion(outputs, labels)
             loss.backward()
-    
+
             optimizer.step()
+            optimizer.zero_grad()
 
             first_avg = view_size
 
@@ -242,23 +263,24 @@ def main():
 
             #scheduler.step(loss)
 
-            if epoch % 500 == 0:
+            if index % 500 == 0:
                 model.eval()
-                torch.save(model, f"{model_path[:-4]}-epoch-{epoch}.dat")
+                torch.save(model, f"{model_path[:-4]}-epoch-{epoch}-index-{index}.dat")
                 model.train()
-            #if epoch % 2 == 0:
+            #if index % 2 == 0:
                 #outputs = outputs.cpu().detach()
                 #labels = labels.cpu().detach()
 
                 #for i in range(1, dataset.sequence_length):
                 #    sliced_outputs = outputs[:, i, :]
                 #    sliced_labels = labels[:, i, :]
-                # 
+                #
                 #    sliced_loss = slice_criterion(sliced_outputs, sliced_labels)
                 #    for_lengths[i] = sliced_loss.item()
 
             for_lengths[dataset.sequence_length - 1] = loss.item()
-            if epoch % animation_interval == 0:
+
+            if index % animation_interval == 0:
                 ax0l0.remove()
                 ax0l0, = ax0.plot(np.arange(len(losses[-first_avg:])), losses[-first_avg:], "k-")
                 ax0.relim()
@@ -269,7 +291,7 @@ def main():
                 ax1l0, = ax1.plot(np.arange(len(averages[-first_avg:])), averages[-first_avg:], "k-")
                 ax1l1, = ax1.plot(np.arange(len(double_averages[-first_avg:])), double_averages[-first_avg:], "k-")
                 ax1.relim()
-                ax1.autoscale_view()    
+                ax1.autoscale_view()
 
                 ax2l0.remove()
                 ax2l0, = ax2.plot(np.arange(len(lrs[-first_avg*8:])), lrs[-first_avg*8:], "k-")
@@ -289,11 +311,10 @@ def main():
 
                 #print(f"{outputs[-1]}"
 
-                
 
-                print(f"[{epoch}/{n_epochs}] loss: {loss.item():.4f}, lr: {lr}, output: {outputs[0].cpu().detach()}, label: {labels[0].cpu().detach()}, seq_len: {dataset.sequence_length:}")
 
-            bar()
+                print(f"[{epoch}/{n_epochs}/{index}] loss: {loss.item():.4f}, lr: {lr}, output: {outputs[0][0].cpu().detach()}, label: {labels[0][0].cpu().detach()}, seq_len: {dataset.sequence_length:}")
+
     model.eval()
     torch.save(model, model_path)
 
