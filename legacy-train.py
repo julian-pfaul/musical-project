@@ -418,7 +418,7 @@ def main():
             optimizer.zero_grad()
 
             if no_gui:
-                if model_type == "ypsilon" and epoch % 2 == 0 and index <= 8:
+                if model_type == "ypsilon" and index % 5 == 0:
                     print(f"{loss.item()} {s_loss.item()} {e_loss.item()} {p_loss.item()} {v_loss.item()}")
                 continue
 
