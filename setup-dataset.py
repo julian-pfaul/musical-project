@@ -48,7 +48,7 @@ def create_ypsilon_dataset(load_directory, save_directory, name, filter_fn, prog
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("dataset_type", type=str, choices=["tau"])
+parser.add_argument("dataset_type", type=str, choices=["tau", "ypsilon"])
 parser.add_argument("load_directory", type=str)
 parser.add_argument("save_directory", type=str)
 parser.add_argument("name", type=str)

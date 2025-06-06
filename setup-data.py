@@ -18,11 +18,7 @@ if not os.path.exists(save_directory):
 paths = [os.path.join(load_directory, fn) for fn in os.listdir(load_directory)]
 paths = [path for path in paths if not os.path.isdir(path)]
 
-iterator = tqdm(enumerate(paths), desc="paths", leave=False)
-
-
-
-
+iterator = enumerate(tqdm(paths, desc="paths", leave=False))
 
 for index, path in iterator:
     midi = None
