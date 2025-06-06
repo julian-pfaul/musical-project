@@ -5,6 +5,9 @@ import pretty_midi
 import argparse
 import alive_progress 
 
+import pypianoroll as pr
+
+import matplotlib.pyplot as plt
 
 def main():
     parser = argparse.ArgumentParser()
@@ -14,8 +17,9 @@ def main():
     parser.add_argument("-op", "--output-path", type=str, required=True)
 
     parser.add_argument("-i", "--iterations", type=int, required=True)
+    parser.add_argument("-cl", "--context-length", type=int, required=True)
 
-    parser.add_argument("-mt", "--model-type", type=str, nargs="?", choices=["kappa", "kappa-ii", "lambda", "mu", "nu", "omicron"], required=True)
+    parser.add_argument("-mt", "--model-type", type=str, nargs="?", choices=["kappa", "kappa-ii", "lambda", "mu", "nu", "omicron", "sigma", "sigma-iii"], required=True)
 
     parser.add_argument("-t", "--temperature", type=float, nargs="?", default=1.0)
     
@@ -27,6 +31,7 @@ def main():
     output_path = args.output_path
     iterations = args.iterations
     model_type = args.model_type
+    context_length = args.context_length
 
     temperature = args.temperature
     
@@ -43,12 +48,13 @@ def main():
         case "midi":
             midi_data = pretty_midi.PrettyMIDI(input_path)
             piece_data = mupo.convert_midi_to_tensor(midi_data)
+            piece_data = piece_data[:context_length, :]
 
             del midi_data
 
     piece_data = piece_data.cuda()
 
-    if model_type == "kappa-ii" or model_type == "mu" or model_type == "nu" or model_type == "omicron":
+    if model_type == "kappa-ii" or model_type == "mu" or model_type == "nu" or model_type == "omicron" or model_type == "sigma" or model_type == "sigma-iii":
         piece_data = piece_data.unsqueeze(dim=0)
 
     model = model.cuda()
@@ -61,6 +67,7 @@ def main():
         for iteration in range(0, iterations):
             with torch.no_grad():
                 model_output = None
+                extra = None
 
                 match model_type:
                     case "kappa-ii":
@@ -77,6 +84,10 @@ def main():
                     case "omicron":
                         input_data = piece_data[:, -model.meta_data.mw_size:, :]
                         model_output = model(input_data)
+                    case "sigma":
+                        model_output = model(piece_data)
+                    case "sigma-iii":
+                        model_output, extra = model(piece_data)
 
                 #print(piece_data, model_output)
 
@@ -104,13 +115,51 @@ def main():
                     case "omicron":
                         model_output = model_output.squeeze()
                         piece_data = piece_data.squeeze()
+                    case "sigma":
+                        model_output = model_output[0].cpu().detach()
+                        values = mupo.sigma_to_values(model_output)
+                        #print("VALUES:", values)
+                        pitch = values[-1]
+                        start = piece_data[0, -1, 1] + 0.2
+                        start = start.cpu().detach()
+                        duration = torch.tensor(0.2)
+
+                        #print(pitch)
+                        #print(start)
+                        #print(duration)
+
+                        model_output = torch.stack((pitch, start, duration)).cuda()
+
+                        piece_data = piece_data.squeeze()
+                    case "sigma-iii":
+                        model_output = model_output[0].cpu().detach()
+                        extra = extra[0].cpu().detach()
+
+                        values = mupo.sigma_to_values(model_output)
+                        #print("VALUES:", values)
+                        pitch = values[-1]
+                        start = torch.relu(extra[-1, 0])
+                        start = start.cpu().detach()
+                        duration = torch.relu(extra[-1, 1])
+
+                        #print(pitch)
+                        #print(start)
+                        #print(duration)
+
+                        model_output = torch.stack((pitch, start, duration)).cuda()
+                        piece_data = piece_data.squeeze()
+                        #print(model_output.shape)
+                        #print(piece_data.shape)
+
+                        #piece_data = torch.cat((piece_data.squeeze()[0].unsqueeze(dim=0), model_output))
 
 
                 #print(model_output, piece_data)
 
+                #if model_type != "sigma-iii":
                 piece_data = torch.vstack((piece_data, model_output))
    
-                if model_type == "kappa-ii" or model_type == "mu" or model_type == "nu" or model_type == "omicron":
+                if model_type == "kappa-ii" or model_type == "mu" or model_type == "nu" or model_type == "omicron" or model_type == "sigma" or model_type == "sigma-iii":
                     piece_data = piece_data.unsqueeze(dim=0)
 
                 del model_output
@@ -121,12 +170,18 @@ def main():
 
     #print(piece_data.shape)
 
-    if model_type == "kappa-ii" or model_type == "mu" or model_type == "nu" or model_type == "omicron":
+    if model_type == "kappa-ii" or model_type == "mu" or model_type == "nu" or model_type == "omicron" or model_type == "sigma" or model_type == "sigma-iii":
         piece_data = piece_data.squeeze()
 
     match mode:
         case "midi":
             midi_data = mupo.convert_tensor_to_midi(piece_data)
+
+            piano_roll = pr.from_pretty_midi(midi_data)
+            piano_roll.plot()
+
+            plt.show()
+
             midi_data.write(output_path)
 
             del midi_data

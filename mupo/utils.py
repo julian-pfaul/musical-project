@@ -5,6 +5,8 @@ import shutil
 
 import pretty_midi
 
+from tqdm import tqdm
+
 import alive_progress as ap
 
 def sequence_length(x):
@@ -36,24 +38,16 @@ def copy_files(src_dir, dest_dir, filter_substr = None, with_p_bar=False):
     if filter_substr is not None:
         fnames = [fn for fn in fnames if fn.find(filter_substr) != -1]
 
-    if not with_p_bar:
-        for fn in fnames:
-            src_path = os.path.join(src_dir, fn)
-            dest_path = os.path.join(dest_dir, fn)
+    for fn in tqdm(fnames, leave=False):
+        src_path = os.path.join(src_dir, fn)
+        dest_path = os.path.join(dest_dir, fn)
 
+        try:
             shutil.copy(src_path, dest_path)
+        except Exception:
+            ...
 
-        return
-    
-    with ap.alive_bar(len(fnames), title="copying files", spinner=None) as bar:
-        for fn in fnames:
-            src_path = os.path.join(src_dir, fn)
-            dest_path = os.path.join(dest_dir, fn)
-
-            shutil.copy(src_path, dest_path)
-    
-            bar()
-
+    return
 
 def directory_file_names_and_paths(directory):
     return [
@@ -95,6 +89,57 @@ def convert_tensor_to_midi(input_tensor):
         duration = tensor_note[2].item()
 
         midi_note = pretty_midi.Note(velocity=int(64), pitch=max(0, min(int(pitch), 127)), start=float(start), end=float(start+duration))
+
+        instrument.notes.append(midi_note)
+
+    midi_data.instruments.append(instrument)
+
+    return midi_data
+
+
+def encode_midi(midi):
+    midi_data = []
+
+    for instrument in midi.instruments:
+        instrument_data = []
+
+        for note in instrument.notes:
+            start = note.start
+            end = note.end
+            pitch = note.pitch
+            velocity = note.velocity
+
+            note_data = torch.tensor([start, end, pitch, velocity])
+
+            instrument_data.append(note_data)
+
+        instrument_data = torch.stack(instrument_data)
+
+        midi_data.append(instrument_data)
+
+    target_length = max([t.size(0) for t in midi_data])
+    midi_data = torch.stack([torch.cat([t, torch.zeros(target_length-t.size(0), t.size(1))], dim=0) for t in midi_data])
+
+    return midi_data
+
+
+def decode_midi(data):
+    midi_data = pretty_midi.PrettyMIDI()
+
+    instrument = pretty_midi.Instrument(program=0)
+
+    for note in data:
+        start = note[0].item()
+        end = note[1].item()
+        pitch = int(note[2].item())
+        velocity = int(note[3].item())
+
+        if pitch <= 0:
+            break
+
+        #print(start, end, end - start)
+
+        midi_note = pretty_midi.Note(velocity=max(0, min(velocity, 127)), pitch=max(0, min(pitch, 127)), start=float(start), end=float(end))
 
         instrument.notes.append(midi_note)
 

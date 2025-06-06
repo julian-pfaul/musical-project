@@ -33,6 +33,8 @@ from .pi_ii import *
 
 from .rho import *
 
+from .sigma import *
+
 from .scaled_mae_loss import *
 
 from .conversion import *
@@ -40,6 +42,9 @@ from .conversion import *
 from .sequence_dataset import *
 
 from .train import *
+
+from .tau import *
+from .ypsilon import *
 
 __all__ = [
         "alpha_model",
@@ -68,9 +73,12 @@ __all__ = [
         "scaled_mae_loss",
         "sequence_dataset",
         "sequence_model",
+        "sigma",
+        "tau",
         #"theta_model",
         "train",
         "utils",
+        "ypsilon",
         "zeta_dataset",
         "zeta_model",
         "zeta_model_ii"
