@@ -1,0 +1,3 @@
+[submodule "extern/midifile"]
+	path = extern/midifile
+	url = https://github.com/julian-pfaul/midifile.git
